@@ -1,8 +1,11 @@
+#![forbid(unsafe_code)]
+
 use core::borrow::Borrow;
 use core::hash::Hash;
 use core::marker::PhantomData;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
+use std::sync::Arc;
 
 pub trait InsertionIndex: Ord + Copy {
     const ZERO: Self;
@@ -97,6 +100,15 @@ impl<K: Clone> CloneKey<K> for K {
 impl<K> CloneKey<K> for Rc<K> {
     fn new(key: K) -> Self {
         Rc::new(key)
+    }
+    #[allow(private_interfaces)]
+    fn sealed() -> Sealed {
+        Sealed
+    }
+}
+impl<K> CloneKey<K> for Arc<K> {
+    fn new(key: K) -> Self {
+        Arc::new(key)
     }
     #[allow(private_interfaces)]
     fn sealed() -> Sealed {

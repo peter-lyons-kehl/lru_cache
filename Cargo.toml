@@ -1,6 +1,15 @@
 [package]
 name = "lru_cache"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+license = "BSD-2-Clause OR Apache-2.0 OR MIT"
+rust-version = "1.65.0"
+
+authors = ["Peter Lyons Kehl<peter.kehl@gmail.com>"]
+description = "Configurable, efficient, simple and safe LRU (Least Recently Used) cache"
+
+categories = ["algorithms", "caching", "data-structures"]
+
+keywords = ["cache", "lru", "hashmap", "data-structures"]
 
 [dependencies]
