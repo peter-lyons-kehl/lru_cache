@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod double_hash;
+pub mod double_key;
+
 use core::borrow::Borrow;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
@@ -7,7 +10,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-pub trait InsertionIndex: Ord + Copy {
+trait InsertionIndex: Ord + Copy {
     const ZERO: Self;
     /** Maximum index. */
     const MAX: Self;
@@ -39,7 +42,6 @@ type UsizeAndU32 = u32;
 
 #[cfg(target_pointer_width = "16")]
 type UsizeAndU64 = u64;
-//------
 
 #[cfg(target_pointer_width = "64")]
 type UsizeAndU32 = u64;
@@ -47,8 +49,6 @@ type UsizeAndU32 = u64;
 #[cfg(target_pointer_width = "64")]
 type UsizeAndU64 = u64;
 // If there is an 128bit platform, add similar.
-//
-//------
 
 impl InsertionIndex for u32 {
     const ZERO: Self = 0;
@@ -78,289 +78,6 @@ impl InsertionIndex for u128 {
     }
     fn accommodates(size: usize) -> bool {
         Self::MAX >= size as Self
-    }
-}
-
-struct Sealed;
-
-pub trait CloneKey<K>: Borrow<K> + Clone {
-    fn new(key: K) -> Self;
-    #[allow(private_interfaces)]
-    fn sealed() -> Sealed;
-}
-impl<K: Clone> CloneKey<K> for K {
-    fn new(key: K) -> Self {
-        key
-    }
-    #[allow(private_interfaces)]
-    fn sealed() -> Sealed {
-        Sealed
-    }
-}
-impl<K> CloneKey<K> for Rc<K> {
-    fn new(key: K) -> Self {
-        Rc::new(key)
-    }
-    #[allow(private_interfaces)]
-    fn sealed() -> Sealed {
-        Sealed
-    }
-}
-impl<K> CloneKey<K> for Arc<K> {
-    fn new(key: K) -> Self {
-        Arc::new(key)
-    }
-    #[allow(private_interfaces)]
-    fn sealed() -> Sealed {
-        Sealed
-    }
-}
-
-/**
- * Like a tuple of `I` and `CK`, but using only `I` part for comparison, so that we don't need the
- * `CK` part when looking it up.
- */
-struct IndexAndKey<K, I: InsertionIndex, CK: CloneKey<K>> {
-    idx: I,
-    ck: CK,
-    _phantom_key: PhantomData<K>,
-}
-impl<K, I: InsertionIndex, CK: CloneKey<K>> IndexAndKey<K, I, CK> {
-    fn new(idx: I, ck: CK) -> Self {
-        Self {
-            idx,
-            ck,
-            _phantom_key: PhantomData,
-        }
-    }
-}
-impl<K, I: InsertionIndex, CK: CloneKey<K>> PartialEq for IndexAndKey<K, I, CK> {
-    fn eq(&self, other: &Self) -> bool {
-        self.idx == other.idx
-    }
-    fn ne(&self, other: &Self) -> bool {
-        self.idx != other.idx
-    }
-}
-impl<K, I: InsertionIndex, CK: CloneKey<K>> Eq for IndexAndKey<K, I, CK> {}
-impl<K, I: InsertionIndex, CK: CloneKey<K>> PartialOrd for IndexAndKey<K, I, CK> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.idx.partial_cmp(&other.idx)
-    }
-    fn ge(&self, other: &Self) -> bool {
-        self.idx.ge(&other.idx)
-    }
-    fn gt(&self, other: &Self) -> bool {
-        self.idx.gt(&other.idx)
-    }
-    fn le(&self, other: &Self) -> bool {
-        self.idx.le(&other.idx)
-    }
-    fn lt(&self, other: &Self) -> bool {
-        self.idx.lt(&other.idx)
-    }
-}
-impl<K, I: InsertionIndex, CK: CloneKey<K>> Ord for IndexAndKey<K, I, CK> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.idx.cmp(&other.idx)
-    }
-}
-
-struct Idx<I: InsertionIndex> {
-    /** The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.` */
-    hash: u64,
-    idx: I,
-}
-impl<I: InsertionIndex> PartialEq for Idx<I> {
-    fn eq(&self, other: &Self) -> bool {
-        self.idx == other.idx
-    }
-    fn ne(&self, other: &Self) -> bool {
-        self.idx != other.idx
-    }
-}
-impl<I: InsertionIndex> Eq for Idx<I> {}
-impl<I: InsertionIndex> PartialOrd for Idx<I> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.idx.partial_cmp(&other.idx)
-    }
-    fn ge(&self, other: &Self) -> bool {
-        self.idx.ge(&other.idx)
-    }
-    fn gt(&self, other: &Self) -> bool {
-        self.idx.gt(&other.idx)
-    }
-    fn le(&self, other: &Self) -> bool {
-        self.idx.le(&other.idx)
-    }
-    fn lt(&self, other: &Self) -> bool {
-        self.idx.lt(&other.idx)
-    }
-}
-impl<I: InsertionIndex> Ord for Idx<I> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.idx.cmp(&other.idx)
-    }
-}
-impl<I: InsertionIndex + Hash> Hash for Idx<I> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
-    }
-}
-
-#[derive(PartialEq, Eq)]
-struct Key<K> {
-    /** The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.` */
-    hash: u64,
-    key: K,
-}
-impl<K: Hash> Hash for Key<K> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
-    }
-}
-
-/** A bi-modal wrapper. On its own it uses only `ck` part for [PartialEq] and [Hash]. However, see trait for borrowing as comparable by `idx` part, too. */
-struct KeyAndIdx<K, I: InsertionIndex> {
-    key: Key<K>,
-    idx: Idx<I>,
-}
-impl<K, I: InsertionIndex> KeyAndIdx<K, I> {
-    fn new() -> Self {
-        panic!()
-    }
-}
-impl<K, I: InsertionIndex> Hash for KeyAndIdx<K, I> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.idx.hash);
-    }
-}
-impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {
-    fn eq(&self, other: &Self) -> bool {
-        debug_assert_eq!(self.key == other.key, self.idx == other.idx);
-        self.key == other.key
-    }
-    fn ne(&self, other: &Self) -> bool {
-        debug_assert_eq!(self.key != other.key, self.idx != other.idx);
-        self.key != other.key
-    }
-}
-impl<K: Eq, I: InsertionIndex> Eq for KeyAndIdx<K, I> {}
-
-impl<K, I: InsertionIndex> Borrow<Key<K>> for KeyAndIdx<K, I> {
-    fn borrow(&self) -> &Key<K> {
-        &self.key
-    }
-}
-impl<K, I: InsertionIndex> Borrow<Idx<I>> for KeyAndIdx<K, I> {
-    fn borrow(&self) -> &Idx<I> {
-        &self.idx
-    }
-}
-/*impl<'a, K, I: InsertionIndex> Borrow<KorI<'a, K, I>> for KandI<K, I> {
-    fn borrow(&self) -> &KorI<'a, K, I> {
-        &KorI::K(&self.k, self.hash)
-    }
-}*/
-
-pub struct LRUCache<
-    K,
-    V,
-    I: InsertionIndex,
-    CK: CloneKey<K>,
-    const MOST_RECENT_FAST: bool,
-    const RECYCLE: bool,
-> {
-    max_size: usize,
-    next_insertion_index: I,
-    //                      HashMap<  KandI,      V >
-    //
-    //                      HashMap< (K, I, u64), V >
-    key_to_value_and_index: HashMap<CK, (V, I)>,
-    /** Always sorted. */
-    //                Vec< Idx >
-    //
-    //                Vec< (I, u64) >
-    indexes_and_keys: Vec<IndexAndKey<K, I, CK>>,
-    _phantom_key: PhantomData<K>,
-}
-
-impl<
-        K: Hash + Eq,
-        V,
-        I: InsertionIndex,
-        CK: CloneKey<K> + Hash + Eq,
-        const MOST_RECENT_FAST: bool,
-        const RECYCLE: bool,
-    > LRUCache<K, V, I, CK, MOST_RECENT_FAST, RECYCLE>
-{
-    pub fn new(max_size: usize) -> Self {
-        assert!(I::accommodates(max_size));
-        Self {
-            max_size,
-            next_insertion_index: I::ZERO,
-            key_to_value_and_index: HashMap::with_capacity(max_size),
-            indexes_and_keys: Vec::with_capacity(max_size),
-            _phantom_key: PhantomData,
-        }
-    }
-
-    pub fn put(&mut self, k: K, v: V) {
-        debug_assert!(self.key_to_value_and_index.len() <= self.max_size);
-
-        if let Some((_old_v, old_idx)) = self.key_to_value_and_index.remove(&k) {
-            let old_idx_and_key_pos = self
-                .indexes_and_keys
-                .binary_search_by_key(&old_idx, |idx_and_key| idx_and_key.idx)
-                .unwrap();
-            // We always remove the old entry, even if the storage is not full (to our capacity)
-            // yet. We could store an Option, and set it to None, which would save the shifting of
-            // the rest of items. However, that would help only while storage is not full. But, a
-            // cache is beneficial/intended to use once it gets full, so we keep it simple.
-            let old_key = self.indexes_and_keys.remove(old_idx_and_key_pos);
-            debug_assert!(*old_key.ck.borrow() == k);
-        } else {
-            if self.key_to_value_and_index.len() == self.max_size {
-                // remove the least recently used
-                let oldest_idx_and_key = self.indexes_and_keys.remove(0);
-                let (_, oldest_idx_paired) = self
-                    .key_to_value_and_index
-                    .remove(oldest_idx_and_key.ck.borrow())
-                    .unwrap();
-                assert!(oldest_idx_and_key.idx == oldest_idx_paired);
-            }
-        }
-        let ck = CK::new(k);
-        self.key_to_value_and_index
-            .insert(ck.clone(), (v, self.next_insertion_index));
-        self.indexes_and_keys
-            .push(IndexAndKey::new(self.next_insertion_index, ck));
-
-        self.next_insertion_index.increment();
-    }
-
-    pub fn get(&mut self, k: &K) -> Option<&V> {
-        if let Some(value_and_index) = self.key_to_value_and_index.get_mut(k) {
-            let old_idx_and_key_pos = self
-                .indexes_and_keys
-                .binary_search_by_key(&value_and_index.1, |idx_and_key| idx_and_key.idx)
-                .unwrap();
-
-            let existing_index_and_key = self.indexes_and_keys.remove(old_idx_and_key_pos);
-            debug_assert!(*existing_index_and_key.ck.borrow() == *k);
-
-            self.indexes_and_keys.push(IndexAndKey::new(
-                self.next_insertion_index,
-                existing_index_and_key.ck,
-            ));
-
-            value_and_index.1 = self.next_insertion_index;
-
-            self.next_insertion_index.increment();
-            return Some(&value_and_index.0);
-        } else {
-            return None;
-        }
     }
 }
 
