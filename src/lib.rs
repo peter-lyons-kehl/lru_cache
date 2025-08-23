@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use core::borrow::Borrow;
-use core::hash::Hash;
+use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -116,7 +116,10 @@ impl<K> CloneKey<K> for Arc<K> {
     }
 }
 
-/** Like a tuple of `I` and `CK`, but using only `I` part for comparison, so that we don't need the `CK` part when looking it up. */
+/**
+ * Like a tuple of `I` and `CK`, but using only `I` part for comparison, so that we don't need the
+ * `CK` part when looking it up.
+ */
 struct IndexAndKey<K, I: InsertionIndex, CK: CloneKey<K>> {
     idx: I,
     ck: CK,
@@ -162,6 +165,60 @@ impl<K, I: InsertionIndex, CK: CloneKey<K>> Ord for IndexAndKey<K, I, CK> {
         self.idx.cmp(&other.idx)
     }
 }
+
+/** A bi-modal wrapper. On its own it uses only `ck` part for [PartialEq] and [Hash]. However, see trait for borrowing as comparable by `idx` part, too. */
+struct KandI<K, I: InsertionIndex> {
+    k: K,
+    idx: I,
+    /** The actual hash of [KandI] may NOT be same as `hash`, but it will be based on it.` */
+    hash: u64,
+}
+impl<K, I: InsertionIndex> KandI<K, I> {
+    fn new() -> Self {
+        panic!()
+    }
+}
+impl<K, I: InsertionIndex> Hash for KandI<K, I> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
+impl<K: PartialEq, I: InsertionIndex> PartialEq for KandI<K, I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.k == other.k
+    }
+    fn ne(&self, other: &Self) -> bool {
+        self.k != other.k
+    }
+}
+impl<K: Eq, I: InsertionIndex> Eq for KandI<K, I> {}
+
+fn _f() {
+    let mut m: HashMap<KandI<char, u8>, ()> = HashMap::new();
+    m.insert(<KandI<char, u8>>::new(), ());
+}
+
+struct Idx<I: InsertionIndex> {
+    idx: I,
+    hash: u64,
+}
+
+enum KorI<'a, K, I: InsertionIndex> {
+    K(&'a K, u64),
+    I(&'a I, u64),
+}
+
+impl<K, I: InsertionIndex> Borrow<K> for KandI<K, I> {
+    fn borrow(&self) -> &K {
+        &self.k
+    }
+}
+/*impl<'a, K, I: InsertionIndex> Borrow<KorI<'a, K, I>> for KandI<K, I> {
+    fn borrow(&self) -> &KorI<'a, K, I> {
+        &KorI::K(&self.k, self.hash)
+    }
+}*/
+
 pub struct LRUCache<
     K,
     V,
@@ -172,8 +229,14 @@ pub struct LRUCache<
 > {
     max_size: usize,
     next_insertion_index: I,
+    //                      HashMap<  KandI,      V >
+    //
+    //                      HashMap< (K, I, u64), V >
     key_to_value_and_index: HashMap<CK, (V, I)>,
     /** Always sorted. */
+    //                Vec< Idx >
+    //
+    //                Vec< (I, u64) >
     indexes_and_keys: Vec<IndexAndKey<K, I, CK>>,
     _phantom_key: PhantomData<K>,
 }
@@ -254,30 +317,6 @@ impl<
         } else {
             return None;
         }
-        /*
-        // @TODO without k.clone()
-        let mut value_and_idx = self
-            .key_to_value_and_index
-            .entry(k.clone());
-        if let Entry::Occupied(mut occupied_entry) = value_and_idx {
-            let existing_key = self.insertion_index_to_key.remove(&occupied_entry.get_mut().1).unwrap();
-            debug_assert!( existing_key==*k );
-            self.insertion_index_to_key.insert(self.next_insertion_index, existing_key);
-
-            occupied_entry.get_mut().1 = self.next_insertion_index;
-
-            self.next_insertion_index.increment();
-            // "cannot return value referencing local variable `occupied_entry`":
-            //
-            // return Some(&(occupied_entry.get().0))
-        } else {
-            return None;
-        }
-        let value_option = self.key_to_value_and_index.get(k);
-        return Some(&value_option.unwrap().0);
-        return Some(&self.key_to_value_and_index.get(k).unwrap().0);
-        //return Some(&self.key_to_value_and_index.get_mut(k).unwrap().0);
-        */
     }
 }
 
