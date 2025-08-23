@@ -166,41 +166,50 @@ impl<K, I: InsertionIndex, CK: CloneKey<K>> Ord for IndexAndKey<K, I, CK> {
     }
 }
 
-/** A bi-modal wrapper. On its own it uses only `ck` part for [PartialEq] and [Hash]. However, see trait for borrowing as comparable by `idx` part, too. */
-struct KandI<K, I: InsertionIndex> {
-    k: K,
-    idx: I,
-    /** The actual hash of [KandI] may NOT be same as `hash`, but it will be based on it.` */
+#[derive(PartialEq, Eq)]
+struct Idx<I: InsertionIndex> {
+    /** The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.` */
     hash: u64,
+    idx: I,
 }
-impl<K, I: InsertionIndex> KandI<K, I> {
+
+#[derive(PartialEq, Eq)]
+struct Key<K> {
+    /** The actual hash of [Key] may NOT be same as `hash`, but it will be based on it.` */
+    hash: u64,
+    key: K,
+}
+
+/** A bi-modal wrapper. On its own it uses only `ck` part for [PartialEq] and [Hash]. However, see trait for borrowing as comparable by `idx` part, too. */
+struct KeyAndIdx<K, I: InsertionIndex> {
+    key: Key<K>,
+    idx: Idx<I>,
+}
+impl<K, I: InsertionIndex> KeyAndIdx<K, I> {
     fn new() -> Self {
         panic!()
     }
 }
-impl<K, I: InsertionIndex> Hash for KandI<K, I> {
+impl<K, I: InsertionIndex> Hash for KeyAndIdx<K, I> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
+        state.write_u64(self.idx.hash);
     }
 }
-impl<K: PartialEq, I: InsertionIndex> PartialEq for KandI<K, I> {
+impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {
     fn eq(&self, other: &Self) -> bool {
-        self.k == other.k
+        debug_assert_eq!( self.key == other.key, self.idx == other.idx );
+        self.key == other.key
     }
     fn ne(&self, other: &Self) -> bool {
-        self.k != other.k
+        debug_assert_eq!( self.key != other.key, self.idx != other.idx );
+        self.key != other.key
     }
 }
-impl<K: Eq, I: InsertionIndex> Eq for KandI<K, I> {}
+impl<K: Eq, I: InsertionIndex> Eq for KeyAndIdx<K, I> {}
 
 fn _f() {
-    let mut m: HashMap<KandI<char, u8>, ()> = HashMap::new();
-    m.insert(<KandI<char, u8>>::new(), ());
-}
-
-struct Idx<I: InsertionIndex> {
-    idx: I,
-    hash: u64,
+    let mut m: HashMap<KeyAndIdx<char, u8>, ()> = HashMap::new();
+    m.insert(<KeyAndIdx<char, u8>>::new(), ());
 }
 
 enum KorI<'a, K, I: InsertionIndex> {
@@ -208,9 +217,14 @@ enum KorI<'a, K, I: InsertionIndex> {
     I(&'a I, u64),
 }
 
-impl<K, I: InsertionIndex> Borrow<K> for KandI<K, I> {
-    fn borrow(&self) -> &K {
-        &self.k
+impl<K, I: InsertionIndex> Borrow<Key<K>> for KeyAndIdx<K, I> {
+    fn borrow(&self) -> &Key<K> {
+        &self.key
+    }
+}
+impl<K, I: InsertionIndex> Borrow<Idx<I>> for KeyAndIdx<K, I> {
+    fn borrow(&self) -> &Idx<I> {
+        &self.idx
     }
 }
 /*impl<'a, K, I: InsertionIndex> Borrow<KorI<'a, K, I>> for KandI<K, I> {
