@@ -166,18 +166,58 @@ impl<K, I: InsertionIndex, CK: CloneKey<K>> Ord for IndexAndKey<K, I, CK> {
     }
 }
 
-#[derive(PartialEq, Eq)]
 struct Idx<I: InsertionIndex> {
     /** The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.` */
     hash: u64,
     idx: I,
 }
+impl<I: InsertionIndex> PartialEq for Idx<I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.idx == other.idx
+    }
+    fn ne(&self, other: &Self) -> bool {
+        self.idx != other.idx
+    }
+}
+impl<I: InsertionIndex> Eq for Idx<I> {}
+impl<I: InsertionIndex> PartialOrd for Idx<I> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.idx.partial_cmp(&other.idx)
+    }
+    fn ge(&self, other: &Self) -> bool {
+        self.idx.ge(&other.idx)
+    }
+    fn gt(&self, other: &Self) -> bool {
+        self.idx.gt(&other.idx)
+    }
+    fn le(&self, other: &Self) -> bool {
+        self.idx.le(&other.idx)
+    }
+    fn lt(&self, other: &Self) -> bool {
+        self.idx.lt(&other.idx)
+    }
+}
+impl<I: InsertionIndex> Ord for Idx<I> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.idx.cmp(&other.idx)
+    }
+}
+impl<I: InsertionIndex + Hash> Hash for Idx<I> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
+}
 
 #[derive(PartialEq, Eq)]
 struct Key<K> {
-    /** The actual hash of [Key] may NOT be same as `hash`, but it will be based on it.` */
+    /** The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.` */
     hash: u64,
     key: K,
+}
+impl<K: Hash> Hash for Key<K> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash);
+    }
 }
 
 /** A bi-modal wrapper. On its own it uses only `ck` part for [PartialEq] and [Hash]. However, see trait for borrowing as comparable by `idx` part, too. */
@@ -197,25 +237,15 @@ impl<K, I: InsertionIndex> Hash for KeyAndIdx<K, I> {
 }
 impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {
     fn eq(&self, other: &Self) -> bool {
-        debug_assert_eq!( self.key == other.key, self.idx == other.idx );
+        debug_assert_eq!(self.key == other.key, self.idx == other.idx);
         self.key == other.key
     }
     fn ne(&self, other: &Self) -> bool {
-        debug_assert_eq!( self.key != other.key, self.idx != other.idx );
+        debug_assert_eq!(self.key != other.key, self.idx != other.idx);
         self.key != other.key
     }
 }
 impl<K: Eq, I: InsertionIndex> Eq for KeyAndIdx<K, I> {}
-
-fn _f() {
-    let mut m: HashMap<KeyAndIdx<char, u8>, ()> = HashMap::new();
-    m.insert(<KeyAndIdx<char, u8>>::new(), ());
-}
-
-enum KorI<'a, K, I: InsertionIndex> {
-    K(&'a K, u64),
-    I(&'a I, u64),
-}
 
 impl<K, I: InsertionIndex> Borrow<Key<K>> for KeyAndIdx<K, I> {
     fn borrow(&self) -> &Key<K> {

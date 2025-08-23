@@ -13,4 +13,17 @@ consumer crates that would otherwise use conflicting features.
 
 ## Safe
 
-`lib.rs` has `#![forbid(unsafe_code)]`.
+`lib.rs` starts with `#![forbid(unsafe_code)]`.
+
+## See also
+
+- https://crates.io/crates/lru-cache
+- https://crates.io/crates/hashlru
+- https://crates.io/crates/lrumap
+- https://crates.io/keywords/lru and https://github.com/khonsulabs/
+- https://crates.io/crates/hashlink
+- https://crates.io/crates/clru
+- https://crates.io/crates/uluru
+- https://crates.io/crates/lazy-lru
+- https://crates.io/crates/lru
+- https://crates.io/crates/intrusive-lru-cache
