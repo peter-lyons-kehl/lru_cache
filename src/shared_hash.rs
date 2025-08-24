@@ -10,8 +10,6 @@ mod hasher;
 
 #[derive(Clone, Copy)]
 struct Idx<I: InsertionIndex> {
-    //@TODO update this comment
-    /// The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.
     hash: u64,
     idx: I,
 }
@@ -53,15 +51,14 @@ impl<I: InsertionIndex> Ord for Idx<I> {
 }
 impl<I: InsertionIndex + Hash> Hash for Idx<I> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
+        hasher::signal_inject_hash(state, self.hash);
     }
 }
 
 #[derive(PartialEq, Eq)]
 struct Key<K> {
-    /// The actual hash of [Key] may NOT be same as `hash`, but it will be based on it. `hash` is
-    /// listed before `k`, so that it can short-circuit the derived [PartialEq] implementation by
-    /// comparing `hash` first.
+    /// `hash` is listed before `k`, so that it can short-circuit the derived [PartialEq]
+    /// implementation by comparing `hash` first.
     hash: u64,
     k: K,
 }
@@ -69,7 +66,7 @@ impl<K: Hash> Key<K> {
     fn new(k: K, hash: u64) -> Self {
         Self { k, hash }
     }
-    /// We consume the hasher, so it's not reused accidentally.
+    /// We consume the hasher, so that it's not reused accidentally.
     fn new_from_hasher<H: Hasher>(key: K, mut h: H) -> Self {
         key.hash(&mut h);
         Self::new(key, h.finish())
@@ -77,7 +74,7 @@ impl<K: Hash> Key<K> {
 }
 impl<K: Hash> Hash for Key<K> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
+        hasher::signal_inject_hash(state, self.hash);
     }
 }
 
@@ -99,7 +96,7 @@ impl<K, I: InsertionIndex> KeyAndIdx<K, I> {
 
 impl<K, I: InsertionIndex> Hash for KeyAndIdx<K, I> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.idx.hash);
+        hasher::signal_inject_hash(state, self.idx.hash);
     }
 }
 impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {

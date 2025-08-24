@@ -3,15 +3,26 @@ use core::hash::{BuildHasher, Hasher};
 const SIGNALLED_LENGTH_PREFIX: usize = usize::MAX;
 
 pub fn signal_inject_hash<H: Hasher>(hasher: &mut H, hash: u64) {
-    hasher.write_length_prefix(SIGNALLED_LENGTH_PREFIX);
-    hasher.write_u64(hash);
+    #[cfg(debug_assertions)]
+    {
+        hasher.write_length_prefix(SIGNALLED_LENGTH_PREFIX);
+        hasher.write_u64(hash);
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        hasher.write_u64(hash);
+        hasher.write_length_prefix(SIGNALLED_LENGTH_PREFIX);
+    }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 enum SignalState {
     NotSignalled,
-    JustSignalled,
-    HashJustInjected(u64),
+    #[cfg(debug_assertions)]
+    Signalled,
+    #[cfg(not(debug_assertions))]
+    HashInjected(u64),
+    HashSignaled(u64),
 }
 
 pub struct SignalledInjectionHasher<H: Hasher> {
@@ -26,15 +37,19 @@ impl<H: Hasher> SignalledInjectionHasher<H> {
             state: SignalState::NotSignalled,
         }
     }
-    #[inline]
+    #[inline(always)]
     fn clear_signalled(&mut self) {
-        self.state = SignalState::NotSignalled;
+        debug_assert_eq!(self.state, SignalState::NotSignalled);
+        #[cfg(debug_assertions)]
+        {
+            self.state = SignalState::NotSignalled;
+        }
     }
 }
 impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
     #[inline]
     fn finish(&self) -> u64 {
-        if let SignalState::HashJustInjected(hash) = self.state {
+        if let SignalState::HashSignaled(hash) = self.state {
             hash
         } else {
             self.hasher.finish()
@@ -64,10 +79,15 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         self.hasher.write_u32(i);
     }
     fn write_u64(&mut self, i: u64) {
-        if self.state == SignalState::JustSignalled {
-            self.state = SignalState::HashJustInjected(i);
+        #[cfg(debug_assertions)]
+        if self.state == SignalState::Signalled {
+            self.state = SignalState::HashSignaled(i);
         } else {
             self.clear_signalled();
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.state = SignalState::HashInjected(i);
         }
         self.hasher.write_u64(i);
     }
@@ -112,10 +132,17 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         self.hasher.write_isize(i);
     }
     fn write_length_prefix(&mut self, len: usize) {
+        #[cfg(debug_assertions)]
         if len == SIGNALLED_LENGTH_PREFIX {
-            self.state = SignalState::JustSignalled;
+            self.state = SignalState::Signalled;
         } else {
             self.clear_signalled();
+        }
+        #[cfg(not(debug_assertions))]
+        if len == SIGNALLED_LENGTH_PREFIX
+            && let SignalState::HashInjected(i) = self.state
+        {
+            self.state = SignalState::HashSignaled(i);
         }
         self.hasher.write_length_prefix(len);
     }

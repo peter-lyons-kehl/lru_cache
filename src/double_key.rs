@@ -109,13 +109,13 @@ pub struct DkCache<
 }
 
 impl<
-        K: Hash + Eq,
-        V,
-        I: InsertionIndex,
-        CK: CloneKey<K> + Hash + Eq,
-        const MOST_RECENT_FAST: bool,
-        const RECYCLE: bool,
-    > DkCache<K, V, I, CK, MOST_RECENT_FAST, RECYCLE>
+    K: Hash + Eq,
+    V,
+    I: InsertionIndex,
+    CK: CloneKey<K> + Hash + Eq,
+    const MOST_RECENT_FAST: bool,
+    const RECYCLE: bool,
+> DkCache<K, V, I, CK, MOST_RECENT_FAST, RECYCLE>
 {
     pub fn new(max_size: usize) -> Self {
         assert!(I::accommodates(max_size));
