@@ -2,6 +2,7 @@ use super::InsertionIndex;
 use core::borrow::Borrow;
 use core::hash::{BuildHasher, Hash, Hasher};
 use core::mem;
+use hasher::SignalledInjectionBuildHasher;
 use std::collections::HashMap;
 use std::hash::RandomState;
 
@@ -152,10 +153,12 @@ impl<'a, K, I: InsertionIndex> Borrow<Kwrap<K>> for KeyAndIdx<K, I> {
     }
 }
 
+type SignalledBuildHasher =
+    SignalledInjectionBuildHasher<<RandomState as BuildHasher>::Hasher, RandomState>;
 pub struct DhCache<K, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool> {
     max_size: usize,
     next_insertion_index: I,
-    key_and_idx_to_value: HashMap<KeyAndIdx<K, I>, V>,
+    key_and_idx_to_value: HashMap<KeyAndIdx<K, I>, V, SignalledBuildHasher>,
     /// Always sorted.
     indexes: Vec<Idx<I>>,
 }
@@ -165,10 +168,13 @@ impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const REC
 {
     pub fn new(max_size: usize) -> Self {
         assert!(I::accommodates(max_size));
+
+        let random_state = RandomState::new();
+        let build_hasher = SignalledInjectionBuildHasher::new(random_state);
         Self {
             max_size,
             next_insertion_index: I::ZERO,
-            key_and_idx_to_value: HashMap::with_capacity(max_size),
+            key_and_idx_to_value: HashMap::with_capacity_and_hasher(max_size, build_hasher),
             indexes: Vec::with_capacity(max_size),
         }
     }
