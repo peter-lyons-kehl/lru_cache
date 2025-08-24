@@ -13,7 +13,7 @@ struct Idx<I: InsertionIndex> {
 }
 impl<I: InsertionIndex> Idx<I> {
     fn new(idx: I, hash: u64) -> Self {
-        Self { idx, hash}
+        Self { idx, hash }
     }
 }
 impl<I: InsertionIndex> PartialEq for Idx<I> {
@@ -61,14 +61,12 @@ struct Key<K> {
 }
 impl<K: Hash> Key<K> {
     fn new(k: K, hash: u64) -> Self {
-        Self {
-            k, hash
-        }
+        Self { k, hash }
     }
     /// We consume the hasher, so it's not reused accidentally.
     fn new_from_hasher<H: Hasher>(key: K, mut h: H) -> Self {
         key.hash(&mut h);
-        Self::new( key, h.finish())
+        Self::new(key, h.finish())
     }
 }
 impl<K: Hash> Hash for Key<K> {
@@ -89,9 +87,7 @@ struct KeyAndIdx<K, I: InsertionIndex> {
 }
 impl<K, I: InsertionIndex> KeyAndIdx<K, I> {
     fn new(key: Key<K>, idx: Idx<I>) -> Self {
-        Self {
-            key, idx
-        }
+        Self { key, idx }
     }
 }
 
@@ -127,7 +123,7 @@ impl<K, I: InsertionIndex> Borrow<Idx<I>> for KeyAndIdx<K, I> {
 /// as they could conflict.
 #[repr(transparent)]
 struct Kwrap<K> {
-    k: K
+    k: K,
 }
 impl<K: PartialEq> PartialEq for Kwrap<K> {
     fn eq(&self, other: &Self) -> bool {
@@ -150,27 +146,16 @@ impl<'a, K, I: InsertionIndex> Borrow<Kwrap<K>> for KeyAndIdx<K, I> {
     }
 }
 
-pub struct DhCache<
-    K,
-    V,
-    I: InsertionIndex,
-    const MOST_RECENT_FAST: bool,
-    const RECYCLE: bool,
-> {
+pub struct DhCache<K, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool> {
     max_size: usize,
     next_insertion_index: I,
     key_and_idx_to_value: HashMap<KeyAndIdx<K, I>, V>,
     /// Always sorted.
-    indexes: Vec<Idx<I>>
+    indexes: Vec<Idx<I>>,
 }
 
-impl<
-        K: Hash + Eq,
-        V,
-        I: InsertionIndex,
-        const MOST_RECENT_FAST: bool,
-        const RECYCLE: bool,
-    > DhCache<K, V, I, MOST_RECENT_FAST, RECYCLE>
+impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool>
+    DhCache<K, V, I, MOST_RECENT_FAST, RECYCLE>
 {
     pub fn new(max_size: usize) -> Self {
         assert!(I::accommodates(max_size));
@@ -187,10 +172,7 @@ impl<
         let key = Key::new_from_hasher(k, self.key_and_idx_to_value.hasher().build_hasher());
 
         if let Some((old_key_and_idx, old_v)) = self.key_and_idx_to_value.remove_entry(&key) {
-            let old_idx_and_key_pos = self
-                .indexes
-                .binary_search(&old_key_and_idx.idx)
-                .unwrap();
+            let old_idx_and_key_pos = self.indexes.binary_search(&old_key_and_idx.idx).unwrap();
             // We always remove the old entry, even if the storage is not full (to our capacity)
             // yet. We could store an Option, and set it to None, which would save the shifting of
             // the rest of items. However, that would help only while storage is not full. But, a
@@ -201,52 +183,47 @@ impl<
                 // remove the least recently used
                 let oldest_idx = self.indexes.remove(0);
 
-                #[cfg(debug_assertions)] {} //@TODO
-                let (oldest_key_and_idx, _oldest_value) = self
-                    .key_and_idx_to_value
-                    .remove_entry(&oldest_idx)
-                    .unwrap();
+                #[cfg(debug_assertions)]
+                {} //@TODO
+                let (oldest_key_and_idx, _oldest_value) =
+                    self.key_and_idx_to_value.remove_entry(&oldest_idx).unwrap();
             }
         }
         let idx = Idx::new(self.next_insertion_index, key.hash);
 
         let key_and_idx = KeyAndIdx::new(key, idx);
-        self.key_and_idx_to_value
-            .insert(key_and_idx, v);
+        self.key_and_idx_to_value.insert(key_and_idx, v);
 
-        self.indexes
-            .push(idx);
+        self.indexes.push(idx);
 
         self.next_insertion_index.increment();
     }
 
     pub fn get(&mut self, k: &K) -> Option<&V> {
         debug_assert!(self.key_and_idx_to_value.len() <= self.max_size);
-        //let key = Key::new_from_hasher(k, self.key_and_idx_to_value.hasher().build_hasher());
         let k_wrap: &Kwrap<K> = unsafe { mem::transmute(k) };
 
-        if let Some((key_and_idx, v)) = self.key_and_idx_to_value.remove_entry(k_wrap/*key*/) {
-            let old_idx_pos = self
-                .indexes
-                .binary_search(&key_and_idx.idx)
-                .unwrap();
+        if let Some((mut key_and_idx, v)) =
+            self.key_and_idx_to_value.remove_entry(k_wrap /*key*/)
+        {
+            let old_idx_pos = self.indexes.binary_search(&key_and_idx.idx).unwrap();
 
             self.indexes.remove(old_idx_pos);
 
-            let idx = Idx::new(self.next_insertion_index, key.hash);
+            //let key = Key::new_from_hasher(k, self.key_and_idx_to_value.hasher().build_hasher());
+            key_and_idx.idx.idx = self.next_insertion_index;
 
-            let key_and_idx = KeyAndIdx::new(key, idx);
-
+            let idx = Idx::new(self.next_insertion_index, key_and_idx.idx.hash);
             self.indexes.push(idx);
 
             // @TODO
             //
-            //self.key_and_idx_to_value.insert(key_and_idx, v);
+            self.key_and_idx_to_value.insert(key_and_idx, v);
 
             self.next_insertion_index.increment();
             return None;
             // @TODO
-            
+
             //return Some(&value_and_index.0);
         } else {
             return None;

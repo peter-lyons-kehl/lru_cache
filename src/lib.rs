@@ -1,7 +1,7 @@
 use core::hash::Hash;
 
-pub mod shared_hash;
 pub mod double_key;
+pub mod shared_hash;
 
 trait InsertionIndex: Ord + Copy + Hash {
     const ZERO: Self;
