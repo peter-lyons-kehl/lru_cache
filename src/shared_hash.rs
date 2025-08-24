@@ -5,8 +5,11 @@ use core::mem;
 use std::collections::HashMap;
 use std::hash::RandomState;
 
+mod hasher;
+
 #[derive(Clone, Copy)]
 struct Idx<I: InsertionIndex> {
+    //@TODO update this comment
     /// The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.
     hash: u64,
     idx: I,
@@ -55,7 +58,9 @@ impl<I: InsertionIndex + Hash> Hash for Idx<I> {
 
 #[derive(PartialEq, Eq)]
 struct Key<K> {
-    /// The actual hash of [Key] may NOT be same as `hash`, but it will be based on it.
+    /// The actual hash of [Key] may NOT be same as `hash`, but it will be based on it. `hash` is
+    /// listed before `k`, so that it can short-circuit the derived [PartialEq] implementation by
+    /// comparing `hash` first.
     hash: u64,
     k: K,
 }
@@ -119,6 +124,7 @@ impl<K, I: InsertionIndex> Borrow<Idx<I>> for KeyAndIdx<K, I> {
     }
 }
 
+// @TODO move PartialEq, Eq and Hash to #[derive()]
 /// Needed, because we can't implement both `Borrow<Idx<I>>` and `Borrow<K>` for `KeyAndIdx<K, I>`,
 /// as they could conflict.
 #[repr(transparent)]
@@ -216,17 +222,13 @@ impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const REC
             let idx = Idx::new(self.next_insertion_index, key_and_idx.idx.hash);
             self.indexes.push(idx);
 
-            // @TODO
-            //
             self.key_and_idx_to_value.insert(key_and_idx, v);
-
             self.next_insertion_index.increment();
-            return None;
-            // @TODO
 
-            //return Some(&value_and_index.0);
+            // We don't perform .get(k) here, because that would re-calculate the hash.
+            self.key_and_idx_to_value.get(&idx)
         } else {
-            return None;
+            None
         }
     }
 }

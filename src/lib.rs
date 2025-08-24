@@ -1,9 +1,11 @@
+#![allow(unstable_features)]
+#![feature(hasher_prefixfree_extras)]
 use core::hash::Hash;
 
 pub mod double_key;
 pub mod shared_hash;
 
-trait InsertionIndex: Ord + Copy + Hash {
+pub trait InsertionIndex: Ord + Copy + Hash {
     const ZERO: Self;
     /** Maximum index. */
     const MAX: Self;
@@ -41,7 +43,7 @@ type UsizeAndU32 = u64;
 
 #[cfg(target_pointer_width = "64")]
 type UsizeAndU64 = u64;
-// If there is an 128bit platform, add similar.
+// If there is a 128bit platform in the future, add similar.
 
 impl InsertionIndex for u32 {
     const ZERO: Self = 0;
