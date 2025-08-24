@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 use super::InsertionIndex;
 use core::borrow::Borrow;
 use core::hash::{Hash, Hasher};

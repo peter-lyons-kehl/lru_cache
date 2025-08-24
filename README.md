@@ -1,6 +1,6 @@
 # LRU cache
 
-Configurable, efficient, simple and safe LRU (Least Recently Used) cache.
+Configurable, efficient and simple LRU (Least Recently Used) cache.
 
 ## Configurable at zero cost
 
@@ -13,7 +13,8 @@ consumer crates that would otherwise use conflicting features.
 
 ## Safe
 
-`lib.rs` starts with `#![forbid(unsafe_code)]`.
+`double_keys` module starts with `#![forbid(unsafe_code)]`. `shared_hash` does use `unsafe`, but
+only minimal (for a `transmute` of a transparent wrapper).
 
 ## See also
 

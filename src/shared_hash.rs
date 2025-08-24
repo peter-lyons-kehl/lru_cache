@@ -1,17 +1,19 @@
 use super::InsertionIndex;
 use core::borrow::Borrow;
 use core::hash::{BuildHasher, Hash, Hasher};
+use core::mem;
 use std::collections::HashMap;
+use std::hash::RandomState;
 
 #[derive(Clone, Copy)]
 struct Idx<I: InsertionIndex> {
-    /// The actual hash of [Idx] may NOT be same as `single_hash`, but it will be based on it.
-    single_hash: u64,
+    /// The actual hash of [Idx] may NOT be same as `hash`, but it will be based on it.
+    hash: u64,
     idx: I,
 }
 impl<I: InsertionIndex> Idx<I> {
-    fn new(idx: I, single_hash: u64) -> Self {
-        Self { idx, single_hash}
+    fn new(idx: I, hash: u64) -> Self {
+        Self { idx, hash}
     }
 }
 impl<I: InsertionIndex> PartialEq for Idx<I> {
@@ -47,20 +49,20 @@ impl<I: InsertionIndex> Ord for Idx<I> {
 }
 impl<I: InsertionIndex + Hash> Hash for Idx<I> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.single_hash);
+        state.write_u64(self.hash);
     }
 }
 
 #[derive(PartialEq, Eq)]
 struct Key<K> {
-    /// The actual hash of [Key] may NOT be same as `single_hash`, but it will be based on it.
-    single_hash: u64,
-    key: K,
+    /// The actual hash of [Key] may NOT be same as `hash`, but it will be based on it.
+    hash: u64,
+    k: K,
 }
 impl<K: Hash> Key<K> {
-    fn new(key: K, single_hash: u64) -> Self {
+    fn new(k: K, hash: u64) -> Self {
         Self {
-            key, single_hash
+            k, hash
         }
     }
     /// We consume the hasher, so it's not reused accidentally.
@@ -71,32 +73,7 @@ impl<K: Hash> Key<K> {
 }
 impl<K: Hash> Hash for Key<K> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.single_hash);
-    }
-}
-
-// @TODO?:
-/// We don't store a single_hash, so that we can transmute &K to KeyRef<K>.
-struct KeyRef<'a, K> {
-    single_hash: u64, // @TODO Remove single_hash?
-    key_ref: &'a K,
-}
-impl<'a, K: Hash> KeyRef<'a, K> {
-    fn new(key_ref: &'a K, single_hash: u64) -> Self {
-        Self {
-            key_ref, single_hash
-        }
-    }
-    /// We consume the hasher, so it's not reused accidentally.
-    fn new_from_hasher<H: Hasher>(key_ref: &'a K, mut h: H) -> Self {
-        key_ref.hash(&mut h);
-        Self::new( key_ref, h.finish())
-    }
-}
-impl<'a, K: Hash> Hash for KeyRef<'a, K> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        /// The following is different to: self.single_hash.hash(state)
-        state.write_u64(self.single_hash);
+        state.write_u64(self.hash);
     }
 }
 
@@ -120,7 +97,7 @@ impl<K, I: InsertionIndex> KeyAndIdx<K, I> {
 
 impl<K, I: InsertionIndex> Hash for KeyAndIdx<K, I> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.idx.single_hash);
+        state.write_u64(self.idx.hash);
     }
 }
 impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {
@@ -140,14 +117,36 @@ impl<K, I: InsertionIndex> Borrow<Key<K>> for KeyAndIdx<K, I> {
         &self.key
     }
 }
-impl<'a, K, I: InsertionIndex> Borrow<KeyRef<'a, K>> for KeyAndIdx<K, I> {
-    fn borrow(&self) -> &KeyRef<'a, K> {
-        &self.key
-    }
-}
 impl<K, I: InsertionIndex> Borrow<Idx<I>> for KeyAndIdx<K, I> {
     fn borrow(&self) -> &Idx<I> {
         &self.idx
+    }
+}
+
+/// Needed, because we can't implement both `Borrow<Idx<I>>` and `Borrow<K>` for `KeyAndIdx<K, I>`,
+/// as they could conflict.
+#[repr(transparent)]
+struct Kwrap<K> {
+    k: K
+}
+impl<K: PartialEq> PartialEq for Kwrap<K> {
+    fn eq(&self, other: &Self) -> bool {
+        self.k == other.k
+    }
+    fn ne(&self, other: &Self) -> bool {
+        self.k != other.k
+    }
+}
+impl<K: Eq> Eq for Kwrap<K> {}
+impl<K: Hash> Hash for Kwrap<K> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.k.hash(state)
+    }
+}
+
+impl<'a, K, I: InsertionIndex> Borrow<Kwrap<K>> for KeyAndIdx<K, I> {
+    fn borrow(&self) -> &Kwrap<K> {
+        unsafe { mem::transmute(&self.key.k) }
     }
 }
 
@@ -209,7 +208,7 @@ impl<
                     .unwrap();
             }
         }
-        let idx = Idx::new(self.next_insertion_index, key.single_hash);
+        let idx = Idx::new(self.next_insertion_index, key.hash);
 
         let key_and_idx = KeyAndIdx::new(key, idx);
         self.key_and_idx_to_value
@@ -223,9 +222,10 @@ impl<
 
     pub fn get(&mut self, k: &K) -> Option<&V> {
         debug_assert!(self.key_and_idx_to_value.len() <= self.max_size);
-        let key = Key::new_from_hasher(k, self.key_and_idx_to_value.hasher().build_hasher());
+        //let key = Key::new_from_hasher(k, self.key_and_idx_to_value.hasher().build_hasher());
+        let k_wrap: &Kwrap<K> = unsafe { mem::transmute(k) };
 
-        if let Some((key_and_idx, v)) = self.key_and_idx_to_value.remove_entry(key) {
+        if let Some((key_and_idx, v)) = self.key_and_idx_to_value.remove_entry(k_wrap/*key*/) {
             let old_idx_pos = self
                 .indexes
                 .binary_search(&key_and_idx.idx)
@@ -233,7 +233,7 @@ impl<
 
             self.indexes.remove(old_idx_pos);
 
-            let idx = Idx::new(self.next_insertion_index, key.single_hash);
+            let idx = Idx::new(self.next_insertion_index, key.hash);
 
             let key_and_idx = KeyAndIdx::new(key, idx);
 

@@ -1,7 +1,6 @@
-#![forbid(unsafe_code)]
 use core::hash::Hash;
 
-pub mod double_hash;
+pub mod shared_hash;
 pub mod double_key;
 
 trait InsertionIndex: Ord + Copy + Hash {
