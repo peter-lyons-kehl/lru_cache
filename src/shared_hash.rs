@@ -178,6 +178,8 @@ impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const REC
 
     pub fn put(&mut self, k: K, v: V) {
         debug_assert!(self.key_and_idx_to_value.len() <= self.max_size);
+        debug_assert_eq!(self.key_and_idx_to_value.len(), self.indexes.len());
+
         let key = Key::new_from_hasher(k, self.key_and_idx_to_value.hasher().build_hasher());
 
         if let Some((old_key_and_idx, old_v)) = self.key_and_idx_to_value.remove_entry(&key) {
@@ -210,6 +212,8 @@ impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const REC
 
     pub fn get(&mut self, k: &K) -> Option<&V> {
         debug_assert!(self.key_and_idx_to_value.len() <= self.max_size);
+        debug_assert_eq!(self.key_and_idx_to_value.len(), self.indexes.len());
+
         let k_wrap: &Kwrap<K> = unsafe { mem::transmute(k) };
 
         if let Some((mut key_and_idx, v)) =

@@ -135,14 +135,16 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
             self.state = SignalState::Signalled;
         } else {
             self.debug_assert_not_signalled();
+            self.hasher.write_length_prefix(len);
         }
         #[cfg(not(debug_assertions))]
         if len == SIGNALLED_LENGTH_PREFIX
             && let SignalState::HashInjected(i) = self.state
         {
             self.state = SignalState::HashSignaled(i);
+        } else {
+            self.hasher.write_length_prefix(len);
         }
-        self.hasher.write_length_prefix(len);
     }
     #[inline]
     fn write_str(&mut self, s: &str) {
