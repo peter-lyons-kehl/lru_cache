@@ -91,7 +91,7 @@ impl<K, I: InsertionIndex, CK: CloneKey<K>> Ord for IndexAndKey<K, I, CK> {
     }
 }
 
-pub struct LRUCache<
+pub struct DkCache<
     K,
     V,
     I: InsertionIndex,
@@ -101,14 +101,8 @@ pub struct LRUCache<
 > {
     max_size: usize,
     next_insertion_index: I,
-    //                      HashMap<  KandI,      V >
-    //
-    //                      HashMap< (K, I, u64), V >
     key_to_value_and_index: HashMap<CK, (V, I)>,
-    /** Always sorted. */
-    //                Vec< Idx >
-    //
-    //                Vec< (I, u64) >
+    /// Always sorted.
     indexes_and_keys: Vec<IndexAndKey<K, I, CK>>,
     _phantom_key: PhantomData<K>,
 }
@@ -120,7 +114,7 @@ impl<
         CK: CloneKey<K> + Hash + Eq,
         const MOST_RECENT_FAST: bool,
         const RECYCLE: bool,
-    > LRUCache<K, V, I, CK, MOST_RECENT_FAST, RECYCLE>
+    > DkCache<K, V, I, CK, MOST_RECENT_FAST, RECYCLE>
 {
     pub fn new(max_size: usize) -> Self {
         assert!(I::accommodates(max_size));
@@ -174,12 +168,12 @@ impl<
                 .binary_search_by_key(&value_and_index.1, |idx_and_key| idx_and_key.idx)
                 .unwrap();
 
-            let existing_index_and_key = self.indexes_and_keys.remove(old_idx_and_key_pos);
-            debug_assert!(*existing_index_and_key.ck.borrow() == *k);
+            let old_index_and_key = self.indexes_and_keys.remove(old_idx_and_key_pos);
+            debug_assert!(*old_index_and_key.ck.borrow() == *k);
 
             self.indexes_and_keys.push(IndexAndKey::new(
                 self.next_insertion_index,
-                existing_index_and_key.ck,
+                old_index_and_key.ck,
             ));
 
             value_and_index.1 = self.next_insertion_index;

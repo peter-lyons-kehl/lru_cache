@@ -1,16 +1,10 @@
 #![forbid(unsafe_code)]
+use core::hash::Hash;
 
 pub mod double_hash;
 pub mod double_key;
 
-use core::borrow::Borrow;
-use core::hash::{Hash, Hasher};
-use core::marker::PhantomData;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
-
-trait InsertionIndex: Ord + Copy {
+trait InsertionIndex: Ord + Copy + Hash {
     const ZERO: Self;
     /** Maximum index. */
     const MAX: Self;
