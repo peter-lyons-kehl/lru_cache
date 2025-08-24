@@ -21,7 +21,7 @@ enum SignalState {
     #[cfg(debug_assertions)]
     Signalled,
     #[cfg(not(debug_assertions))]
-    HashInjected(u64),
+    HashInjected(u64), // NOT going back to NotSignalled - opportunity for error
     HashSignaled(u64),
 }
 
@@ -37,13 +37,10 @@ impl<H: Hasher> SignalledInjectionHasher<H> {
             state: SignalState::NotSignalled,
         }
     }
+    // @TODO if this doesn't optimize away in release, replace with a macro.
     #[inline(always)]
-    fn clear_signalled(&mut self) {
+    fn debug_assert_not_signalled(&self) {
         debug_assert_eq!(self.state, SignalState::NotSignalled);
-        #[cfg(debug_assertions)]
-        {
-            self.state = SignalState::NotSignalled;
-        }
     }
 }
 impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
@@ -52,6 +49,7 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         if let SignalState::HashSignaled(hash) = self.state {
             hash
         } else {
+            self.debug_assert_not_signalled();
             self.hasher.finish()
         }
     }
@@ -59,23 +57,23 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
     /// `write_u64` would when signalling.
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write(bytes);
     }
 
     #[inline]
     fn write_u8(&mut self, i: u8) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_u8(i);
     }
     #[inline]
     fn write_u16(&mut self, i: u16) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_u16(i);
     }
     #[inline]
     fn write_u32(&mut self, i: u32) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_u32(i);
     }
     fn write_u64(&mut self, i: u64) {
@@ -83,7 +81,7 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         if self.state == SignalState::Signalled {
             self.state = SignalState::HashSignaled(i);
         } else {
-            self.clear_signalled();
+            self.debug_assert_not_signalled();
         }
         #[cfg(not(debug_assertions))]
         {
@@ -93,42 +91,42 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
     }
     #[inline]
     fn write_u128(&mut self, i: u128) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_u128(i);
     }
     #[inline]
     fn write_usize(&mut self, i: usize) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_usize(i);
     }
     #[inline]
     fn write_i8(&mut self, i: i8) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_i8(i);
     }
     #[inline]
     fn write_i16(&mut self, i: i16) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_i16(i);
     }
     #[inline]
     fn write_i32(&mut self, i: i32) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_i32(i);
     }
     #[inline]
     fn write_i64(&mut self, i: i64) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_i64(i);
     }
     #[inline]
     fn write_i128(&mut self, i: i128) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_i128(i);
     }
     #[inline]
     fn write_isize(&mut self, i: isize) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_isize(i);
     }
     fn write_length_prefix(&mut self, len: usize) {
@@ -136,7 +134,7 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         if len == SIGNALLED_LENGTH_PREFIX {
             self.state = SignalState::Signalled;
         } else {
-            self.clear_signalled();
+            self.debug_assert_not_signalled();
         }
         #[cfg(not(debug_assertions))]
         if len == SIGNALLED_LENGTH_PREFIX
@@ -148,7 +146,7 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
     }
     #[inline]
     fn write_str(&mut self, s: &str) {
-        self.clear_signalled();
+        self.debug_assert_not_signalled();
         self.hasher.write_str(s);
     }
 }
