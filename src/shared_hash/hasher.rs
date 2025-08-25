@@ -15,16 +15,16 @@ const SIGNALLED_LENGTH_PREFIX: usize = usize::MAX;
 ///   
 ///   Instead, use with [SignalledInjectionHasher] provided by [SignalledInjectionBuildHasher] only.
 /// Extra validation of signalling in the user's [core::hash::Hash] implementation is done ONLY in
-/// `debug` build (when `debug_assertions` are turned on).
+/// `debug` build (when `debug_assertions` are turned on) or with `force_debug_hasher` feature.
 pub fn signal_inject_hash<H: Hasher>(hasher: &mut H, hash: u64) {
     // The order of operations is intentionally different for debug and release. This (hopefully)
     // helps us notice any logical errors or opportunities for improvement in this module earlier.
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature="force_debug_hasher"))]
     {
         hasher.write_length_prefix(SIGNALLED_LENGTH_PREFIX);
         hasher.write_u64(hash);
     }
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature="force_debug_hasher")))]
     {
         hasher.write_u64(hash);
         hasher.write_length_prefix(SIGNALLED_LENGTH_PREFIX);
@@ -38,9 +38,9 @@ pub fn signal_inject_hash<H: Hasher>(hasher: &mut H, hash: u64) {
 #[derive(PartialEq, Eq, Debug)]
 enum SignalState {
     NotSignalled,
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature="force_debug_hasher"))]
     Signalled,
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature="force_debug_hasher")))]
     HashInjected(u64),
     HashSignaled(u64),
 }
@@ -60,7 +60,8 @@ impl<H: Hasher> SignalledInjectionHasher<H> {
     // @TODO if this doesn't optimize away in release, replace with a macro.
     #[inline(always)]
     fn debug_assert_ordinary_write(&self) {
-        debug_assert_eq!(self.state, SignalState::NotSignalled);
+        #[cfg(any(debug_assertions, feature="force_debug_hasher"))]
+        assert_eq!(self.state, SignalState::NotSignalled);
     }
 }
 impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
@@ -97,13 +98,13 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         self.hasher.write_u32(i);
     }
     fn write_u64(&mut self, i: u64) {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature="force_debug_hasher"))]
         if self.state == SignalState::Signalled {
             self.state = SignalState::HashSignaled(i);
         } else {
             self.debug_assert_ordinary_write();
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature="force_debug_hasher")))]
         {
             self.state = SignalState::HashInjected(i);
         }
@@ -150,14 +151,14 @@ impl<H: Hasher> Hasher for SignalledInjectionHasher<H> {
         self.hasher.write_isize(i);
     }
     fn write_length_prefix(&mut self, len: usize) {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature="force_debug_hasher"))]
         if len == SIGNALLED_LENGTH_PREFIX {
             self.state = SignalState::Signalled;
         } else {
             self.debug_assert_ordinary_write();
             self.hasher.write_length_prefix(len);
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature="force_debug_hasher")))]
         if len == SIGNALLED_LENGTH_PREFIX
             && let SignalState::HashInjected(i) = self.state
         {

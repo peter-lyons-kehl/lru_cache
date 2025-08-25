@@ -13,3 +13,7 @@ categories = ["algorithms", "caching", "data-structures"]
 keywords = ["cache", "lru", "hashmap", "data-structures"]
 
 [dependencies]
+
+[features]
+force_debug_hasher = []
+# default = ["force_debug_hasher"]
