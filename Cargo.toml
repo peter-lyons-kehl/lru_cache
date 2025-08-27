@@ -6,7 +6,7 @@ license = "BSD-2-Clause OR Apache-2.0 OR MIT"
 rust-version = "1.85.0"
 
 authors = ["Peter Lyons Kehl<peter.kehl@gmail.com>"]
-description = "Configurable, efficient, simple and safe LRU (Least Recently Used) cache"
+description = "Configurable, efficient and simple LRU (Least Recently Used) cache"
 
 categories = ["algorithms", "caching", "data-structures"]
 
