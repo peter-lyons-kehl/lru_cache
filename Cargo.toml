@@ -14,6 +14,8 @@ keywords = ["cache", "lru", "hashmap", "data-structures"]
 
 [dependencies]
 
+hash-injector = { path = "../hash-injector/hash-injector-lib", features = ["asserts", "injector_checks_finish", "injector_checks_same_flow"]}
+
 [features]
 force_debug_hasher = []
 # default = ["force_debug_hasher"]

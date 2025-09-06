@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "hash-injector"
+version = "0.1.0"
+
+[[package]]
 name = "lru_cache"
 version = "0.1.0"
+dependencies = [
+ "hash-injector",
+]

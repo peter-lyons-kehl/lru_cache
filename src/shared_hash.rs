@@ -2,23 +2,21 @@ use super::InsertionIndex;
 use core::borrow::Borrow;
 use core::hash::{BuildHasher, Hash, Hasher};
 use core::mem;
-use hasher::SignalledInjectionBuildHasher;
+use hash_injector::SignalledInjectionBuildHasher;
 use std::collections::HashMap;
 use std::hash::RandomState;
 
-mod hasher;
-
 #[derive(Clone, Copy)]
-struct Idx<I: InsertionIndex> {
+struct Idx<I: InsertionIndex, const SIGNAL_FIRST: bool> {
     hash: u64,
     idx: I,
 }
-impl<I: InsertionIndex> Idx<I> {
+impl<I: InsertionIndex, const SIGNAL_FIRST: bool> Idx<I, SIGNAL_FIRST> {
     fn new(idx: I, hash: u64) -> Self {
         Self { idx, hash }
     }
 }
-impl<I: InsertionIndex> PartialEq for Idx<I> {
+impl<I: InsertionIndex, const SIGNAL_FIRST: bool> PartialEq for Idx<I, SIGNAL_FIRST> {
     fn eq(&self, other: &Self) -> bool {
         self.idx == other.idx
     }
@@ -26,8 +24,8 @@ impl<I: InsertionIndex> PartialEq for Idx<I> {
         self.idx != other.idx
     }
 }
-impl<I: InsertionIndex> Eq for Idx<I> {}
-impl<I: InsertionIndex> PartialOrd for Idx<I> {
+impl<I: InsertionIndex, const SIGNAL_FIRST: bool> Eq for Idx<I, SIGNAL_FIRST> {}
+impl<I: InsertionIndex, const SIGNAL_FIRST: bool> PartialOrd for Idx<I, SIGNAL_FIRST> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.idx.partial_cmp(&other.idx)
     }
@@ -44,25 +42,25 @@ impl<I: InsertionIndex> PartialOrd for Idx<I> {
         self.idx.lt(&other.idx)
     }
 }
-impl<I: InsertionIndex> Ord for Idx<I> {
+impl<I: InsertionIndex, const SIGNAL_FIRST: bool> Ord for Idx<I, SIGNAL_FIRST> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.idx.cmp(&other.idx)
     }
 }
-impl<I: InsertionIndex + Hash> Hash for Idx<I> {
+impl<I: InsertionIndex + Hash, const SIGNAL_FIRST: bool> Hash for Idx<I, SIGNAL_FIRST> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hasher::signal_inject_hash(state, self.hash);
+        hash_injector::signal_inject_hash::<H, SIGNAL_FIRST>(state, self.hash);
     }
 }
 
 #[derive(PartialEq, Eq)]
-struct Key<K> {
+struct Key<K, const SIGNAL_FIRST: bool> {
     /// `hash` is listed before `k`, so that it can short-circuit the derived [PartialEq]
     /// implementation by comparing `hash` first.
     hash: u64,
     k: K,
 }
-impl<K: Hash> Key<K> {
+impl<K: Hash, const SIGNAL_FIRST: bool> Key<K, SIGNAL_FIRST> {
     fn new(k: K, hash: u64) -> Self {
         Self { k, hash }
     }
@@ -72,9 +70,9 @@ impl<K: Hash> Key<K> {
         Self::new(key, h.finish())
     }
 }
-impl<K: Hash> Hash for Key<K> {
+impl<K: Hash, const SIGNAL_FIRST: bool> Hash for Key<K, SIGNAL_FIRST> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hasher::signal_inject_hash(state, self.hash);
+        hash_injector::signal_inject_hash::<H, SIGNAL_FIRST>(state, self.hash);
     }
 }
 
@@ -84,22 +82,22 @@ impl<K: Hash> Hash for Key<K> {
 /// We intentionally do NOT implement `Borrow<K>``. We don't want to have
 /// [DbCache::key_and_idx_to_value] keys accidentally compared to `K`, because
 /// [DbCache::key_and_idx_to_value] doesn't use a hash of `K` - it uses its "double hash" instead.
-struct KeyAndIdx<K, I: InsertionIndex> {
-    key: Key<K>,
-    idx: Idx<I>,
+struct KeyAndIdx<K, I: InsertionIndex, const SIGNAL_FIRST: bool> {
+    key: Key<K, SIGNAL_FIRST>,
+    idx: Idx<I, SIGNAL_FIRST>,
 }
-impl<K, I: InsertionIndex> KeyAndIdx<K, I> {
-    fn new(key: Key<K>, idx: Idx<I>) -> Self {
+impl<K, I: InsertionIndex, const SIGNAL_FIRST: bool> KeyAndIdx<K, I, SIGNAL_FIRST> {
+    fn new(key: Key<K, SIGNAL_FIRST>, idx: Idx<I, SIGNAL_FIRST>) -> Self {
         Self { key, idx }
     }
 }
 
-impl<K, I: InsertionIndex> Hash for KeyAndIdx<K, I> {
+impl<K, I: InsertionIndex, const SIGNAL_FIRST: bool> Hash for KeyAndIdx<K, I, SIGNAL_FIRST> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hasher::signal_inject_hash(state, self.idx.hash);
+        hash_injector::signal_inject_hash::<H, SIGNAL_FIRST>(state, self.idx.hash);
     }
 }
-impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {
+impl<K: PartialEq, I: InsertionIndex, const SIGNAL_FIRST: bool> PartialEq for KeyAndIdx<K, I, SIGNAL_FIRST> {
     fn eq(&self, other: &Self) -> bool {
         debug_assert_eq!(self.key == other.key, self.idx == other.idx);
         self.key == other.key
@@ -109,15 +107,15 @@ impl<K: PartialEq, I: InsertionIndex> PartialEq for KeyAndIdx<K, I> {
         self.key != other.key
     }
 }
-impl<K: Eq, I: InsertionIndex> Eq for KeyAndIdx<K, I> {}
+impl<K: Eq, I: InsertionIndex, const SIGNAL_FIRST: bool> Eq for KeyAndIdx<K, I, SIGNAL_FIRST> {}
 
-impl<K, I: InsertionIndex> Borrow<Key<K>> for KeyAndIdx<K, I> {
-    fn borrow(&self) -> &Key<K> {
+impl<K, I: InsertionIndex, const SIGNAL_FIRST: bool> Borrow<Key<K, SIGNAL_FIRST>> for KeyAndIdx<K, I, SIGNAL_FIRST> {
+    fn borrow(&self) -> &Key<K, SIGNAL_FIRST> {
         &self.key
     }
 }
-impl<K, I: InsertionIndex> Borrow<Idx<I>> for KeyAndIdx<K, I> {
-    fn borrow(&self) -> &Idx<I> {
+impl<K, I: InsertionIndex, const SIGNAL_FIRST: bool> Borrow<Idx<I, SIGNAL_FIRST>> for KeyAndIdx<K, I, SIGNAL_FIRST> {
+    fn borrow(&self) -> &Idx<I, SIGNAL_FIRST> {
         &self.idx
     }
 }
@@ -144,24 +142,24 @@ impl<K: Hash> Hash for Kwrap<K> {
     }
 }
 
-impl<'a, K, I: InsertionIndex> Borrow<Kwrap<K>> for KeyAndIdx<K, I> {
+impl<'a, K, I: InsertionIndex, const SIGNAL_FIRST: bool> Borrow<Kwrap<K>> for KeyAndIdx<K, I, SIGNAL_FIRST> {
     fn borrow(&self) -> &Kwrap<K> {
         unsafe { mem::transmute(&self.key.k) }
     }
 }
 
-type SignalledBuildHasher =
-    SignalledInjectionBuildHasher<<RandomState as BuildHasher>::Hasher, RandomState>;
-pub struct DhCache<K, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool> {
+type SignalledBuildHasher<const SIGNAL_FIRST: bool> =
+    SignalledInjectionBuildHasher<<RandomState as BuildHasher>::Hasher, RandomState, SIGNAL_FIRST>;
+pub struct DhCache<K, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool, const SIGNAL_FIRST: bool> {
     max_size: usize,
     next_insertion_index: I,
-    key_and_idx_to_value: HashMap<KeyAndIdx<K, I>, V, SignalledBuildHasher>,
+    key_and_idx_to_value: HashMap<KeyAndIdx<K, I, SIGNAL_FIRST>, V, SignalledBuildHasher<SIGNAL_FIRST>>,
     /// Always sorted.
-    indexes: Vec<Idx<I>>,
+    indexes: Vec<Idx<I, SIGNAL_FIRST>>,
 }
 
-impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool>
-    DhCache<K, V, I, MOST_RECENT_FAST, RECYCLE>
+impl<K: Hash + Eq, V, I: InsertionIndex, const MOST_RECENT_FAST: bool, const RECYCLE: bool, const SIGNAL_FIRST: bool>
+    DhCache<K, V, I, MOST_RECENT_FAST, RECYCLE, SIGNAL_FIRST>
 {
     pub fn new(max_size: usize) -> Self {
         assert!(I::accommodates(max_size));
