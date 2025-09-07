@@ -14,8 +14,35 @@ keywords = ["cache", "lru", "hashmap", "data-structures"]
 
 [dependencies]
 
-hash-injector = { path = "../hash-injector/hash-injector-lib", features = ["asserts", "injector_checks_finish", "injector_checks_same_flow"]}
+hash-injector = { path = "../hash-injector/hash-injector-lib", features = ["asserts", "injector-checks-finish", "injector-checks-same-flow"]}
 
 [features]
-force_debug_hasher = []
-# default = ["force_debug_hasher"]
+
+# Expensive
+asserts = ["hash-injector/asserts"]
+
+# Use to check that the Hasher is (or behaves like) `SignalledInjectionHasher`. Use only if the types
+# that inject hashes are never to be used with any incompatible Hasher.
+#
+# Expensive depending on
+# - the underlying Hasher (its `finish(self)`), or
+# - the "original" hashed type containing (directly or indirectly) arrays or slices, especially if
+#   multiple.
+injector-checks-finish = ["hash-injector/injector-checks-finish"]
+
+# Check that SIGNAL_FIRST const generic is the same between `signal_inject_hash(...)` and `SignalledInjectionHasher`.
+#
+# Use ONLY if injector-checks-finish is enabled, too.
+#
+# Expensive.
+injector-checks-same-flow = ["hash-injector/injector-checks-same-flow"]
+
+#default = ["asserts"]
+#default = ["asserts", "injector-checks-finish"]
+
+# NOT allowed:
+#default = [                                     "injector-checks-same-flow"]
+# NOT allowed:
+#default = ["asserts",                           "injector-checks-same-flow"]
+
+#default = ["asserts", "injector-checks-finish", "injector-checks-same-flow"]
