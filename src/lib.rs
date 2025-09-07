@@ -1,5 +1,7 @@
 #![allow(unstable_features)]
 #![feature(hasher_prefixfree_extras)]
+#![cfg_attr(feature = "adt-const-params", feature(adt_const_params))]
+
 use core::hash::Hash;
 
 pub mod double_key;

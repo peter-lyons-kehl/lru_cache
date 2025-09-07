@@ -30,19 +30,34 @@ asserts = ["hash-injector/asserts"]
 #   multiple.
 injector-checks-finish = ["hash-injector/injector-checks-finish"]
 
-# Check that SIGNAL_FIRST const generic is the same between `signal_inject_hash(...)` and `SignalledInjectionHasher`.
+# Check that signal)first(F) for const generic F is the same between `signal_inject_hash(...)` and
+# `SignalledInjectionHasher`.
 #
 # Use ONLY if injector-checks-finish is enabled, too.
 #
 # Expensive.
 injector-checks-same-flow = ["hash-injector/injector-checks-same-flow"]
 
-#default = ["asserts"]
-#default = ["asserts", "injector-checks-finish"]
+# Whether to use a higher level type for the const generic parameter. If enabled, currently it
+# requires nightly toolchain.
+adt-const-params = ["hash-injector/adt-const-params"]
+
+#default = [                    "asserts"]
+#default = [                    "asserts", "injector-checks-finish"]
 
 # NOT allowed:
-#default = [                                     "injector-checks-same-flow"]
+#default = [                                                         "injector-checks-same-flow"]
 # NOT allowed:
-#default = ["asserts",                           "injector-checks-same-flow"]
+#default = [                    "asserts",                           "injector-checks-same-flow"]
 
-#default = ["asserts", "injector-checks-finish", "injector-checks-same-flow"]
+#default = [                    "asserts", "injector-checks-finish", "injector-checks-same-flow"]
+
+#default = ["adt-const-params", "asserts"]
+#default = ["adt-const-params", "asserts", "injector-checks-finish"]
+
+# NOT allowed:
+#default = ["adt-const-params",                                      "injector-checks-same-flow"]
+# NOT allowed:
+#default = ["adt-const-params", "asserts",                           "injector-checks-same-flow"]
+
+#default = ["adt-const-params", "asserts", "injector-checks-finish", "injector-checks-same-flow"]

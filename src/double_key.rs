@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 use super::InsertionIndex;
 use core::borrow::Borrow;
-use core::hash::{Hash, Hasher};
+use core::hash::Hash;
 use core::marker::PhantomData;
 use std::collections::HashMap;
 use std::rc::Rc;
